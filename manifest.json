@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YouTube Precision Volume",
   "version": "1.0.0",
-  "description": "Réglage ultra-précis du volume des vidéos YouTube, y compris sous 1 %.",
+  "description": "Fine-grained volume control for YouTube videos, down to 0.01%.",
   "permissions": ["activeTab", "scripting"],
   "action": {
     "default_title": "YouTube Precision Volume",

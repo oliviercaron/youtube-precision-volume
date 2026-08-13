@@ -1,8 +1,8 @@
 "use strict";
 
-// --- Fonctions pures (conversion pourcentage <-> volume) ---
+// --- Pure functions (percent <-> volume conversion) ---
 
-// "0,25" ou "0.25" -> 0.25 ; renvoie null si invalide ou hors [0, 100].
+// "0.25" or "0,25" -> 0.25; returns null if invalid or outside [0, 100].
 function parsePercent(text) {
   const normalized = String(text).trim().replace(",", ".");
   if (normalized === "" || !/^\d*\.?\d+$/.test(normalized)) {
@@ -15,21 +15,21 @@ function parsePercent(text) {
   return percent;
 }
 
-// 0.1 (%) -> 0.001 (volume dans [0, 1])
+// 0.1 (%) -> 0.001 (volume in [0, 1])
 function percentToVolume(percent) {
   return Math.min(1, Math.max(0, percent / 100));
 }
 
-// 0.001 -> "0,1 %" (jusqu'à 4 décimales, sans zéros inutiles)
+// 0.001 -> "0.1%" (up to 4 decimals, trailing zeros removed)
 function formatVolume(volume) {
   const percent = volume * 100;
-  const text = percent.toFixed(4).replace(/\.?0+$/, "").replace(".", ",");
-  return (text === "" ? "0" : text) + " %";
+  const text = percent.toFixed(4).replace(/\.?0+$/, "");
+  return (text === "" ? "0" : text) + "%";
 }
 
-// --- Fonctions injectées dans la page YouTube ---
-// Elles sont sérialisées par chrome.scripting.executeScript : elles ne
-// doivent référencer que la page, jamais la portée du popup.
+// --- Functions injected into the YouTube page ---
+// They are serialized by chrome.scripting.executeScript, so they must only
+// reference the page, never the popup scope.
 
 function pageGetVolume() {
   const video = document.querySelector("video");
@@ -51,7 +51,7 @@ function pageSetVolume(volume) {
   return { ok: true, volume: video.volume };
 }
 
-// --- Logique du popup ---
+// --- Popup logic ---
 
 const currentVolumeEl = document.getElementById("current-volume");
 const statusEl = document.getElementById("status");
@@ -85,15 +85,15 @@ async function refreshCurrentVolume() {
     const result = await runInPage(pageGetVolume);
     if (result && result.ok) {
       currentVolumeEl.textContent =
-        formatVolume(result.volume) + (result.muted ? " (muet)" : "");
+        formatVolume(result.volume) + (result.muted ? " (muted)" : "");
       setStatus("");
     } else {
       currentVolumeEl.textContent = "—";
-      setStatus("Aucune vidéo trouvée sur cet onglet.", true);
+      setStatus("No video found in this tab.", true);
     }
   } catch (error) {
     currentVolumeEl.textContent = "—";
-    setStatus("Ouvrez une vidéo YouTube puis réessayez.", true);
+    setStatus("Open a YouTube video, then try again.", true);
   }
 }
 
@@ -102,12 +102,12 @@ async function applyPercent(percent) {
     const result = await runInPage(pageSetVolume, [percentToVolume(percent)]);
     if (result && result.ok) {
       currentVolumeEl.textContent = formatVolume(result.volume);
-      setStatus("Volume appliqué.");
+      setStatus("Volume applied.");
     } else {
-      setStatus("Aucune vidéo trouvée sur cet onglet.", true);
+      setStatus("No video found in this tab.", true);
     }
   } catch (error) {
-    setStatus("Impossible d'appliquer le volume ici.", true);
+    setStatus("Cannot change the volume on this page.", true);
   }
 }
 
@@ -121,7 +121,7 @@ document.getElementById("custom-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const percent = parsePercent(customInput.value);
   if (percent === null) {
-    setStatus("Valeur invalide : entrez un nombre entre 0 et 100.", true);
+    setStatus("Invalid value: enter a number between 0 and 100.", true);
     return;
   }
   applyPercent(percent);

@@ -1,32 +1,32 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>YouTube Precision Volume</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>Volume de précision</h1>
+  <h1>Precision volume</h1>
 
   <div id="current">
-    <span class="label">Volume actuel</span>
+    <span class="label">Current volume</span>
     <span id="current-volume">—</span>
   </div>
 
   <div id="presets">
-    <button class="preset" data-percent="0.01">0,01 %</button>
-    <button class="preset" data-percent="0.1">0,1 %</button>
-    <button class="preset" data-percent="0.5">0,5 %</button>
-    <button class="preset" data-percent="1">1 %</button>
-    <button class="preset" data-percent="2">2 %</button>
-    <button class="preset" data-percent="5">5 %</button>
-    <button class="preset" data-percent="10">10 %</button>
+    <button class="preset" data-percent="0.01">0.01%</button>
+    <button class="preset" data-percent="0.1">0.1%</button>
+    <button class="preset" data-percent="0.5">0.5%</button>
+    <button class="preset" data-percent="1">1%</button>
+    <button class="preset" data-percent="2">2%</button>
+    <button class="preset" data-percent="5">5%</button>
+    <button class="preset" data-percent="10">10%</button>
   </div>
 
   <form id="custom-form">
     <input type="text" id="custom-percent" inputmode="decimal"
-           placeholder="Valeur en % (ex. 0,25)" autocomplete="off">
-    <button type="submit" id="apply">Appliquer</button>
+           placeholder="Custom % (e.g. 0.25)" autocomplete="off">
+    <button type="submit" id="apply">Apply</button>
   </form>
 
   <p id="status" role="status"></p>
