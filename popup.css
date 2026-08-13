@@ -1,0 +1,95 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  width: 260px;
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#current {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+#current .label {
+  opacity: 0.7;
+}
+
+#current-volume {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+#presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 6px 4px;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+button:active {
+  background: rgba(128, 128, 128, 0.3);
+}
+
+#custom-form {
+  display: flex;
+  gap: 6px;
+}
+
+#custom-percent {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+#apply {
+  flex-shrink: 0;
+}
+
+#status {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+#status.error {
+  color: #d93025;
+  opacity: 1;
+}
