@@ -30,18 +30,26 @@ function formatVolume(volume) {
 // --- Functions injected into the YouTube page (runs in MAIN world) ---
 
 function pageGetVolume() {
-  const video = document.querySelector("video");
-  if (video) {
-    return { ok: true, volume: video.volume, muted: video.muted };
-  }
   const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+  const video = document.querySelector("video");
+
+  let vol = null;
+  let muted = false;
+
+  // Check YouTube player API first
   if (player && typeof player.getVolume === "function") {
-    return {
-      ok: true,
-      volume: player.getVolume() / 100,
-      muted: typeof player.isMuted === "function" ? player.isMuted() : false
-    };
+    vol = player.getVolume() / 100;
+    muted = typeof player.isMuted === "function" ? player.isMuted() : (video ? video.muted : false);
+  } else if (video) {
+    vol = video.volume;
+    muted = video.muted;
   }
+
+  if (vol !== null) {
+    window.__ytPrecisionVolume = vol;
+    return { ok: true, volume: vol, muted: muted };
+  }
+
   return { ok: false };
 }
 
@@ -54,18 +62,9 @@ function pageSetVolume(targetPercent) {
     return { ok: false };
   }
 
-  // 1. Store target precision volume on window
   window.__ytPrecisionVolume = volumeRatio;
 
-  // 2. Set HTML5 video element volume
-  if (video) {
-    video.volume = volumeRatio;
-    if (volumeRatio > 0 && video.muted) {
-      video.muted = false;
-    }
-  }
-
-  // 3. Inform YouTube's internal player API
+  // 1. Inform YouTube player API
   if (player) {
     try {
       if (typeof player.unMute === "function" && volumeRatio > 0) {
@@ -77,7 +76,15 @@ function pageSetVolume(targetPercent) {
     } catch (e) {}
   }
 
-  // 4. Update YouTube's internal localStorage & sessionStorage
+  // 2. Set HTML5 video element volume directly
+  if (video) {
+    video.volume = volumeRatio;
+    if (volumeRatio > 0 && video.muted) {
+      video.muted = false;
+    }
+  }
+
+  // 3. Update YouTube's internal localStorage & sessionStorage
   try {
     const volData = {
       volume: Math.round(targetPercent),
@@ -92,25 +99,7 @@ function pageSetVolume(targetPercent) {
     sessionStorage.setItem("yt-player-volume", storageItem);
   } catch (e) {}
 
-  // 5. Attach active lock listener
-  if (video && !video.__ytPrecisionLockAttached) {
-    video.__ytPrecisionLockAttached = true;
-    video.addEventListener("volumechange", () => {
-      if (window.__ytPrecisionVolume !== undefined) {
-        if (Math.abs(video.volume - window.__ytPrecisionVolume) > 0.00001) {
-          if (!window.__ytPrecisionLocking) {
-            window.__ytPrecisionLocking = true;
-            video.volume = window.__ytPrecisionVolume;
-            setTimeout(() => {
-              window.__ytPrecisionLocking = false;
-            }, 30);
-          }
-        }
-      }
-    });
-  }
-
-  return { ok: true, volume: video ? video.volume : volumeRatio };
+  return { ok: true, volume: volumeRatio, muted: volumeRatio === 0 };
 }
 
 // --- Popup UI & Interaction Logic ---
@@ -120,6 +109,8 @@ const currentFill = document.querySelector(".current-fill");
 const currentVolumeEl = document.getElementById("current-volume");
 const statusEl = document.getElementById("status");
 const customInput = document.getElementById("custom-percent");
+
+let isDragging = false;
 
 function setStatus(message, isError) {
   statusEl.textContent = message;
@@ -150,6 +141,7 @@ async function runInPage(func, args) {
 }
 
 async function refreshCurrentVolume() {
+  if (isDragging) return; // Do not overwrite while dragging
   try {
     const result = await runInPage(pageGetVolume);
     if (result && result.ok) {
@@ -205,13 +197,10 @@ document.getElementById("custom-form").addEventListener("submit", (event) => {
 
 // --- Mouse Drag / Slide Volume Scrubber on "Current Volume" ---
 
-let isDragging = false;
-
 function getPercentFromMouse(event) {
   const rect = currentBox.getBoundingClientRect();
   const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
   const rawPercent = (x / rect.width) * 100;
-  // Round to nearest integer for intuitive smooth dragging
   const percent = Math.round(rawPercent);
   return Math.min(100, Math.max(0, percent));
 }
@@ -239,4 +228,9 @@ window.addEventListener("mouseup", () => {
   }
 });
 
+// Initial read on popup open
 refreshCurrentVolume();
+
+// Live poll while popup is open to reflect any native slider changes
+const pollInterval = setInterval(refreshCurrentVolume, 500);
+window.addEventListener("unload", () => clearInterval(pollInterval));
