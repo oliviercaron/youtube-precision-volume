@@ -20,16 +20,14 @@ function percentToVolume(percent) {
   return Math.min(1, Math.max(0, percent / 100));
 }
 
-// 0.001 -> "0.1%" (up to 4 decimals, trailing zeros removed)
+// 0.001 -> "0.1%" (up to 2 decimals, trailing zeros removed)
 function formatVolume(volume) {
   const percent = volume * 100;
-  const text = percent.toFixed(4).replace(/\.?0+$/, "");
+  const text = percent.toFixed(2).replace(/\.?0+$/, "");
   return (text === "" ? "0" : text) + "%";
 }
 
 // --- Functions injected into the YouTube page (runs in MAIN world) ---
-// They are serialized by chrome.scripting.executeScript, so they must only
-// reference the page, never the popup scope.
 
 function pageGetVolume() {
   const video = document.querySelector("video");
@@ -56,7 +54,7 @@ function pageSetVolume(targetPercent) {
     return { ok: false };
   }
 
-  // 1. Store target precision volume on window so listeners can enforce it
+  // 1. Store target precision volume on window
   window.__ytPrecisionVolume = volumeRatio;
 
   // 2. Set HTML5 video element volume
@@ -94,7 +92,7 @@ function pageSetVolume(targetPercent) {
     sessionStorage.setItem("yt-player-volume", storageItem);
   } catch (e) {}
 
-  // 5. Attach an active volume lock listener to prevent YouTube's background sync from resetting it
+  // 5. Attach active lock listener
   if (video && !video.__ytPrecisionLockAttached) {
     video.__ytPrecisionLockAttached = true;
     video.addEventListener("volumechange", () => {
@@ -115,8 +113,10 @@ function pageSetVolume(targetPercent) {
   return { ok: true, volume: video ? video.volume : volumeRatio };
 }
 
-// --- Popup logic ---
+// --- Popup UI & Interaction Logic ---
 
+const currentBox = document.getElementById("current");
+const currentFill = document.querySelector(".current-fill");
 const currentVolumeEl = document.getElementById("current-volume");
 const statusEl = document.getElementById("status");
 const customInput = document.getElementById("custom-percent");
@@ -124,6 +124,10 @@ const customInput = document.getElementById("custom-percent");
 function setStatus(message, isError) {
   statusEl.textContent = message;
   statusEl.classList.toggle("error", Boolean(isError));
+}
+
+function updateVisualLevel(percent) {
+  currentBox.style.setProperty("--vol-percent", `${percent}%`);
 }
 
 async function getActiveTab() {
@@ -149,8 +153,10 @@ async function refreshCurrentVolume() {
   try {
     const result = await runInPage(pageGetVolume);
     if (result && result.ok) {
+      const percent = result.volume * 100;
       currentVolumeEl.textContent =
         formatVolume(result.volume) + (result.muted ? " (muted)" : "");
+      updateVisualLevel(percent);
       setStatus("");
     } else {
       currentVolumeEl.textContent = "—";
@@ -162,12 +168,15 @@ async function refreshCurrentVolume() {
   }
 }
 
-async function applyPercent(percent) {
+async function applyPercent(percent, showStatusMsg = true) {
   try {
     const result = await runInPage(pageSetVolume, [percent]);
     if (result && result.ok) {
       currentVolumeEl.textContent = formatVolume(result.volume);
-      setStatus("Volume applied.");
+      updateVisualLevel(result.volume * 100);
+      if (showStatusMsg) {
+        setStatus("Volume applied.");
+      }
     } else {
       setStatus("No video found in this tab.", true);
     }
@@ -176,12 +185,14 @@ async function applyPercent(percent) {
   }
 }
 
+// Preset buttons
 for (const button of document.querySelectorAll(".preset")) {
   button.addEventListener("click", () => {
     applyPercent(Number(button.dataset.percent));
   });
 }
 
+// Custom input form
 document.getElementById("custom-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const percent = parsePercent(customInput.value);
@@ -190,6 +201,42 @@ document.getElementById("custom-form").addEventListener("submit", (event) => {
     return;
   }
   applyPercent(percent);
+});
+
+// --- Mouse Drag / Slide Volume Scrubber on "Current Volume" ---
+
+let isDragging = false;
+
+function getPercentFromMouse(event) {
+  const rect = currentBox.getBoundingClientRect();
+  const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+  const rawPercent = (x / rect.width) * 100;
+  // Round to nearest integer for intuitive smooth dragging
+  const percent = Math.round(rawPercent);
+  return Math.min(100, Math.max(0, percent));
+}
+
+currentBox.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  isDragging = true;
+  currentBox.classList.add("dragging");
+  const percent = getPercentFromMouse(e);
+  applyPercent(percent, false);
+  e.preventDefault();
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+  const percent = getPercentFromMouse(e);
+  applyPercent(percent, false);
+});
+
+window.addEventListener("mouseup", () => {
+  if (isDragging) {
+    isDragging = false;
+    currentBox.classList.remove("dragging");
+    setStatus("Volume applied.");
+  }
 });
 
 refreshCurrentVolume();
