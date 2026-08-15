@@ -28,21 +28,49 @@ function formatVolume(volume) {
 }
 
 // --- Functions injected into the YouTube page (runs in MAIN world) ---
+// Handles both standard YouTube videos and YouTube Shorts
+
+function findActiveVideo() {
+  // 1. YouTube Shorts: check active reel renderer
+  const activeShort = document.querySelector("ytd-reel-video-renderer[is-active] video, #shorts-player video");
+  if (activeShort) {
+    return activeShort;
+  }
+
+  // 2. Search all video elements for the playing or visible one
+  const videos = Array.from(document.querySelectorAll("video"));
+  if (videos.length === 0) return null;
+  if (videos.length === 1) return videos[0];
+
+  const playing = videos.find(v => !v.paused && v.currentTime > 0);
+  if (playing) return playing;
+
+  const visible = videos.find(v => v.offsetWidth > 0 && v.offsetHeight > 0);
+  if (visible) return visible;
+
+  return videos[0];
+}
+
+function findMoviePlayer() {
+  return document.getElementById("movie_player") ||
+         document.getElementById("shorts-player") ||
+         document.querySelector(".html5-video-player");
+}
 
 function pageGetVolume() {
-  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
-  const video = document.querySelector("video");
+  const activeVideo = findActiveVideo();
+  const player = findMoviePlayer();
 
   let vol = null;
   let muted = false;
 
-  // Check YouTube player API first
-  if (player && typeof player.getVolume === "function") {
+  // On Shorts or normal videos, activeVideo has the real live volume
+  if (activeVideo) {
+    vol = activeVideo.volume;
+    muted = activeVideo.muted;
+  } else if (player && typeof player.getVolume === "function") {
     vol = player.getVolume() / 100;
-    muted = typeof player.isMuted === "function" ? player.isMuted() : (video ? video.muted : false);
-  } else if (video) {
-    vol = video.volume;
-    muted = video.muted;
+    muted = typeof player.isMuted === "function" ? player.isMuted() : false;
   }
 
   if (vol !== null) {
@@ -55,16 +83,16 @@ function pageGetVolume() {
 
 function pageSetVolume(targetPercent) {
   const volumeRatio = Math.min(1, Math.max(0, targetPercent / 100));
-  const video = document.querySelector("video");
-  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+  const player = findMoviePlayer();
+  const allVideos = document.querySelectorAll("video");
 
-  if (!video && !player) {
+  if (allVideos.length === 0 && !player) {
     return { ok: false };
   }
 
   window.__ytPrecisionVolume = volumeRatio;
 
-  // 1. Inform YouTube player API
+  // 1. Inform YouTube player API if available
   if (player) {
     try {
       if (typeof player.unMute === "function" && volumeRatio > 0) {
@@ -76,13 +104,15 @@ function pageSetVolume(targetPercent) {
     } catch (e) {}
   }
 
-  // 2. Set HTML5 video element volume directly
-  if (video) {
-    video.volume = volumeRatio;
-    if (volumeRatio > 0 && video.muted) {
-      video.muted = false;
-    }
-  }
+  // 2. Set volume on ALL video elements (critical for YouTube Shorts feed & preloaded reels)
+  allVideos.forEach(video => {
+    try {
+      video.volume = volumeRatio;
+      if (volumeRatio > 0 && video.muted) {
+        video.muted = false;
+      }
+    } catch (e) {}
+  });
 
   // 3. Update YouTube's internal localStorage & sessionStorage
   try {
@@ -141,7 +171,7 @@ async function runInPage(func, args) {
 }
 
 async function refreshCurrentVolume() {
-  if (isDragging) return; // Do not overwrite while dragging
+  if (isDragging) return;
   try {
     const result = await runInPage(pageGetVolume);
     if (result && result.ok) {
@@ -231,6 +261,6 @@ window.addEventListener("mouseup", () => {
 // Initial read on popup open
 refreshCurrentVolume();
 
-// Live poll while popup is open to reflect any native slider changes
+// Live poll while popup is open
 const pollInterval = setInterval(refreshCurrentVolume, 500);
 window.addEventListener("unload", () => clearInterval(pollInterval));
