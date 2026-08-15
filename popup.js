@@ -27,28 +27,92 @@ function formatVolume(volume) {
   return (text === "" ? "0" : text) + "%";
 }
 
-// --- Functions injected into the YouTube page ---
+// --- Functions injected into the YouTube page (runs in MAIN world) ---
 // They are serialized by chrome.scripting.executeScript, so they must only
 // reference the page, never the popup scope.
 
 function pageGetVolume() {
   const video = document.querySelector("video");
-  if (!video) {
-    return { ok: false };
+  if (video) {
+    return { ok: true, volume: video.volume, muted: video.muted };
   }
-  return { ok: true, volume: video.volume, muted: video.muted };
+  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+  if (player && typeof player.getVolume === "function") {
+    return {
+      ok: true,
+      volume: player.getVolume() / 100,
+      muted: typeof player.isMuted === "function" ? player.isMuted() : false
+    };
+  }
+  return { ok: false };
 }
 
-function pageSetVolume(volume) {
+function pageSetVolume(targetPercent) {
+  const volumeRatio = Math.min(1, Math.max(0, targetPercent / 100));
   const video = document.querySelector("video");
-  if (!video) {
+  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+
+  if (!video && !player) {
     return { ok: false };
   }
-  video.volume = volume;
-  if (volume > 0 && video.muted) {
-    video.muted = false;
+
+  // 1. Store target precision volume on window so listeners can enforce it
+  window.__ytPrecisionVolume = volumeRatio;
+
+  // 2. Set HTML5 video element volume
+  if (video) {
+    video.volume = volumeRatio;
+    if (volumeRatio > 0 && video.muted) {
+      video.muted = false;
+    }
   }
-  return { ok: true, volume: video.volume };
+
+  // 3. Inform YouTube's internal player API
+  if (player) {
+    try {
+      if (typeof player.unMute === "function" && volumeRatio > 0) {
+        player.unMute();
+      }
+      if (typeof player.setVolume === "function") {
+        player.setVolume(targetPercent);
+      }
+    } catch (e) {}
+  }
+
+  // 4. Update YouTube's internal localStorage & sessionStorage
+  try {
+    const volData = {
+      volume: Math.round(targetPercent),
+      muted: targetPercent === 0
+    };
+    const storageItem = JSON.stringify({
+      data: JSON.stringify(volData),
+      expiration: Date.now() + 30 * 24 * 3600 * 1000,
+      creation: Date.now()
+    });
+    localStorage.setItem("yt-player-volume", storageItem);
+    sessionStorage.setItem("yt-player-volume", storageItem);
+  } catch (e) {}
+
+  // 5. Attach an active volume lock listener to prevent YouTube's background sync from resetting it
+  if (video && !video.__ytPrecisionLockAttached) {
+    video.__ytPrecisionLockAttached = true;
+    video.addEventListener("volumechange", () => {
+      if (window.__ytPrecisionVolume !== undefined) {
+        if (Math.abs(video.volume - window.__ytPrecisionVolume) > 0.00001) {
+          if (!window.__ytPrecisionLocking) {
+            window.__ytPrecisionLocking = true;
+            video.volume = window.__ytPrecisionVolume;
+            setTimeout(() => {
+              window.__ytPrecisionLocking = false;
+            }, 30);
+          }
+        }
+      }
+    });
+  }
+
+  return { ok: true, volume: video ? video.volume : volumeRatio };
 }
 
 // --- Popup logic ---
@@ -69,11 +133,12 @@ async function getActiveTab() {
 
 async function runInPage(func, args) {
   const tab = await getActiveTab();
-  if (!tab) {
+  if (!tab || !tab.id) {
     return null;
   }
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
+    world: "MAIN",
     func,
     args: args || [],
   });
@@ -99,7 +164,7 @@ async function refreshCurrentVolume() {
 
 async function applyPercent(percent) {
   try {
-    const result = await runInPage(pageSetVolume, [percentToVolume(percent)]);
+    const result = await runInPage(pageSetVolume, [percent]);
     if (result && result.ok) {
       currentVolumeEl.textContent = formatVolume(result.volume);
       setStatus("Volume applied.");
