@@ -3,7 +3,7 @@
 A lightweight Chrome extension to set the volume of YouTube videos with fine precision. Choose preset levels, type a custom percentage, or simply click and drag across the volume bar.
 
 <p align="center">
-  <img src="screenshot.png" alt="Extension popup" width="290">
+  <img src="youtube_precision_volume.png" alt="Extension popup" width="290">
 </p>
 
 ## Features
