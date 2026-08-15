@@ -1,20 +1,27 @@
 # YouTube Precision Volume
 
-A tiny Chrome extension to set the volume of YouTube videos with real precision, down to 0.01%. Useful when even the lowest step of YouTube's slider is still too loud.
+A lightweight Chrome extension to set the volume of YouTube videos with fine precision. Choose preset levels, type a custom percentage, or simply click and drag across the volume bar.
 
-<img src="screenshot.png" alt="Extension popup" width="290">
+<p align="center">
+  <img src="screenshot.png" alt="Extension popup" width="290">
+</p>
 
-## Install
+## Features
+
+- Click and drag volume scrubbing: Slide horizontally across the volume bar to adjust volume smoothly in real time.
+- Quick presets: Jump straight to 1%, 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%, 90%, or 100%.
+- Custom precision percentage: Enter any decimal percentage (e.g. 15.5%).
+- Volume persistence: Synchronizes with YouTube's player and storage so volume settings do not reset automatically.
+
+## Installation
 
 1. Open `chrome://extensions` in Chrome.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and pick this folder.
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked** and select this folder.
 
-## Use
+## Usage
 
-Open a YouTube video, click the extension icon, then pick a preset or type your own percentage. The value is applied straight to the page's video element: 0.1% sets `video.volume = 0.001`.
-
-Plain HTML, CSS and JavaScript. No frameworks, no tracking, no network requests. Only two permissions: `activeTab` and `scripting`.
+Open any YouTube video, click the extension icon in your toolbar, and adjust the volume using presets, custom input, or by dragging the volume bar.
 
 ## License
 
