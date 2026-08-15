@@ -27,47 +27,30 @@ function formatVolume(volume) {
   return (text === "" ? "0" : text) + "%";
 }
 
-// --- Functions injected into the YouTube page (runs in MAIN world) ---
-// Handles both standard YouTube videos and YouTube Shorts
-
-function findActiveVideo() {
-  // 1. YouTube Shorts: check active reel renderer
-  const activeShort = document.querySelector("ytd-reel-video-renderer[is-active] video, #shorts-player video");
-  if (activeShort) {
-    return activeShort;
-  }
-
-  // 2. Search all video elements for the playing or visible one
-  const videos = Array.from(document.querySelectorAll("video"));
-  if (videos.length === 0) return null;
-  if (videos.length === 1) return videos[0];
-
-  const playing = videos.find(v => !v.paused && v.currentTime > 0);
-  if (playing) return playing;
-
-  const visible = videos.find(v => v.offsetWidth > 0 && v.offsetHeight > 0);
-  if (visible) return visible;
-
-  return videos[0];
-}
-
-function findMoviePlayer() {
-  return document.getElementById("movie_player") ||
-         document.getElementById("shorts-player") ||
-         document.querySelector(".html5-video-player");
-}
+// --- Self-contained functions injected into YouTube page (runs in MAIN world) ---
+// Note: Injected functions cannot call outside helper functions because executeScript serializes only the passed function.
 
 function pageGetVolume() {
-  const activeVideo = findActiveVideo();
-  const player = findMoviePlayer();
+  // 1. Find active video (YouTube Shorts or standard video)
+  let video = document.querySelector("ytd-reel-video-renderer[is-active] video, #shorts-player video");
+  if (!video) {
+    const videos = Array.from(document.querySelectorAll("video"));
+    video = videos.find(v => !v.paused && v.currentTime > 0) ||
+            videos.find(v => v.offsetWidth > 0 && v.offsetHeight > 0) ||
+            videos[0];
+  }
+
+  // 2. Find player element
+  const player = document.getElementById("movie_player") ||
+                 document.getElementById("shorts-player") ||
+                 document.querySelector(".html5-video-player");
 
   let vol = null;
   let muted = false;
 
-  // On Shorts or normal videos, activeVideo has the real live volume
-  if (activeVideo) {
-    vol = activeVideo.volume;
-    muted = activeVideo.muted;
+  if (video) {
+    vol = video.volume;
+    muted = video.muted;
   } else if (player && typeof player.getVolume === "function") {
     vol = player.getVolume() / 100;
     muted = typeof player.isMuted === "function" ? player.isMuted() : false;
@@ -83,7 +66,11 @@ function pageGetVolume() {
 
 function pageSetVolume(targetPercent) {
   const volumeRatio = Math.min(1, Math.max(0, targetPercent / 100));
-  const player = findMoviePlayer();
+
+  const player = document.getElementById("movie_player") ||
+                 document.getElementById("shorts-player") ||
+                 document.querySelector(".html5-video-player");
+
   const allVideos = document.querySelectorAll("video");
 
   if (allVideos.length === 0 && !player) {
@@ -104,7 +91,7 @@ function pageSetVolume(targetPercent) {
     } catch (e) {}
   }
 
-  // 2. Set volume on ALL video elements (critical for YouTube Shorts feed & preloaded reels)
+  // 2. Set volume on ALL video elements (critical for YouTube Shorts feed & standard videos)
   allVideos.forEach(video => {
     try {
       video.volume = volumeRatio;
@@ -161,13 +148,18 @@ async function runInPage(func, args) {
   if (!tab || !tab.id) {
     return null;
   }
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    world: "MAIN",
-    func,
-    args: args || [],
-  });
-  return result ? result.result : null;
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      func,
+      args: args || [],
+    });
+    return result ? result.result : null;
+  } catch (err) {
+    console.error("Script execution failed:", err);
+    return null;
+  }
 }
 
 async function refreshCurrentVolume() {
